@@ -1,0 +1,207 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.vueones.mapper.UsageRecordMapper">
+    <!-- 基础结果映射 -->
+    <resultMap id="BaseResultMap" type="com.vueones.entity.UsageRecord">
+        <id column="id" property="id"/>
+        <result column="chemical_id" property="chemicalId"/>
+        <result column="user_id" property="userId"/>
+        <result column="amount" property="amount"/>
+        <result column="unit" property="unit"/>
+        <result column="usage_time" property="usageTime"/>
+        <result column="usage_purpose" property="usagePurpose"/>
+        <result column="notes" property="notes"/>
+        <result column="create_time" property="createTime"/>
+<!--        <result column="update_time" property="updateTime"/>-->
+        <!-- 关联化学品信息 -->
+        <association property="chemical" javaType="com.vueones.entity.Chemical">
+            <id column="c_id" property="id"/>
+            <result column="c_name" property="name"/>
+        </association>
+        <!-- 关联用户信息 -->
+        <association property="user" javaType="com.vueones.entity.Man">
+            <id column="e_id" property="id"/>
+            <result column="e_name" property="name"/>
+        </association>
+    </resultMap>
+
+    <!-- 基础列 -->
+    <sql id="Base_Column_List">
+        ur.id, ur.chemical_id, ur.user_id, ur.amount, ur.unit, ur.usage_time, ur.usage_purpose,
+        ur.notes, ur.create_time,
+        c.id as c_id, c.name as c_name,
+        e.id as e_id, e.name as e_name
+    </sql>
+
+    <!-- 条件查询列表 -->
+    <select id="selectList" resultMap="BaseResultMap">
+        SELECT
+        <include refid="Base_Column_List"/>
+        FROM usage_record ur
+        LEFT JOIN chemical c ON ur.chemical_id = c.id
+        LEFT JOIN man e ON ur.user_id = e.id
+        <where>
+            <if test="chemicalName != null">
+                AND c.name LIKE CONCAT('%', #{chemicalName, jdbcType=VARCHAR}, '%')
+            </if>
+            <if test="userName != null">
+                AND e.name LIKE CONCAT('%', #{userName, jdbcType=VARCHAR}, '%')
+            </if>
+            <if test="startTime != null">
+                AND ur.usage_time &gt;= #{startTime, jdbcType=TIMESTAMP}
+            </if>
+            <if test="endTime != null">
+                AND ur.usage_time &lt;= #{endTime, jdbcType=TIMESTAMP}
+            </if>
+        </where>
+        ORDER BY ur.usage_time DESC
+    </select>
+
+    <!-- 插入 -->
+    <insert id="insert" parameterType="com.vueones.entity.UsageRecord" useGeneratedKeys="true" keyProperty="id">
+        INSERT INTO usage_record (
+            chemical_id, user_id, amount, unit, usage_time, usage_purpose, notes, create_time
+        ) VALUES (
+            <choose>
+                <when test="chemicalId != null">
+                    #{chemicalId, jdbcType=INTEGER},
+                </when>
+                <otherwise>
+                    (SELECT id FROM chemical WHERE name = #{chemicalName, jdbcType=VARCHAR} LIMIT 1),
+                </otherwise>
+            </choose>
+            <choose>
+                <when test="userId != null">
+                    #{userId, jdbcType=INTEGER},
+                </when>
+                <otherwise>
+                    (SELECT id FROM man WHERE name = #{userName, jdbcType=VARCHAR} LIMIT 1),
+                </otherwise>
+            </choose>
+            #{amount, jdbcType=DECIMAL},
+            #{unit, jdbcType=VARCHAR},
+            #{usageTime, jdbcType=TIMESTAMP},
+            #{usagePurpose, jdbcType=VARCHAR},
+            #{notes, jdbcType=VARCHAR},
+            #{createTime, jdbcType=TIMESTAMP}
+        )
+    </insert>
+
+    <!-- 更新 -->
+    <update id="update" parameterType="com.vueones.entity.UsageRecord">
+        UPDATE usage_record
+        <set>
+            <if test="amount != null">amount = #{amount},</if>
+            <if test="unit != null">unit = #{unit},</if>
+            <if test="usageTime != null">usage_time = #{usageTime},</if>
+            <if test="usagePurpose != null">usage_purpose = #{usagePurpose},</if>
+            <if test="notes != null">notes = #{notes}</if>
+        </set>
+        WHERE id = #{id}
+    </update>
+
+    <!-- 删除 -->
+    <delete id="deleteById">
+        DELETE FROM usage_record WHERE id = #{id}
+    </delete>
+
+    <!-- 根据ID查询 -->
+    <select id="selectById" resultMap="BaseResultMap">
+        SELECT
+        <include refid="Base_Column_List"/>
+        FROM usage_record ur
+        LEFT JOIN chemical c ON ur.chemical_id = c.id
+        LEFT JOIN man e ON ur.user_id = e.id
+        <where>
+            <if test="id != null">
+                AND ur.id = #{id}
+            </if>
+        </where>
+    </select>
+
+    <!-- 统计今日使用次数 -->
+    <select id="countTodayUsage" resultType="int">
+        SELECT COUNT(*)
+        FROM usage_record
+        WHERE DATE(usage_time) = CURDATE()
+    </select>
+
+    <!-- 统计本月使用次数 -->
+    <select id="countMonthUsage" resultType="int">
+        SELECT COUNT(*)
+        FROM usage_record
+        WHERE DATE_FORMAT(usage_time, &apos;%Y-%m&apos;) = DATE_FORMAT(CURDATE(), &apos;%Y-%m&apos;)
+    </select>
+
+    <!-- 统计使用中数量 -->
+    <select id="countActiveUsage" resultType="int">
+        SELECT COUNT(DISTINCT chemical_id)
+        FROM usage_record
+        WHERE usage_time &gt;= DATE_SUB(NOW(), INTERVAL 24 HOUR)
+    </select>
+
+    <!-- 统计使用人数 -->
+    <select id="countDistinctUsers" resultType="int">
+        SELECT COUNT(DISTINCT user_id)
+        FROM usage_record
+        WHERE DATE_FORMAT(usage_time, &apos;%Y-%m&apos;) = DATE_FORMAT(CURDATE(), &apos;%Y-%m&apos;)
+    </select>
+
+    <!-- 根据用户名称查询使用记录 -->
+    <select id="selectByUserName" resultMap="BaseResultMap">
+        SELECT
+        <include refid="Base_Column_List"/>
+        FROM usage_record ur
+        LEFT JOIN chemical c ON ur.chemical_id = c.id
+        LEFT JOIN man e ON ur.user_id = e.id
+        WHERE e.name LIKE CONCAT('%', #{userName}, '%')
+        ORDER BY ur.usage_time DESC
+    </select>
+    
+    <!-- 统计化学品使用总量 -->
+    <select id="getTotalAmount" resultType="java.lang.Double">
+        SELECT SUM(amount)
+        FROM usage_record ur
+        LEFT JOIN chemical c ON ur.chemical_id = c.id
+        <where>
+            <if test="chemicalName != null">
+                AND c.name LIKE CONCAT('%', #{chemicalName, jdbcType=VARCHAR}, '%')
+            </if>
+            <if test="startTime != null">
+                AND ur.usage_time &gt;= #{startTime, jdbcType=TIMESTAMP}
+            </if>
+            <if test="endTime != null">
+                AND ur.usage_time &lt;= #{endTime, jdbcType=TIMESTAMP}
+            </if>
+        </where>
+    </select>
+    
+    <!-- 获取化学品总使用量(通过名称查询) -->
+    <select id="getTotalUsageAmount" resultType="java.lang.String">
+        SELECT IFNULL(SUM(amount), 0)
+        FROM usage_record ur
+        LEFT JOIN chemical c ON ur.chemical_id = c.id
+        <where>
+            <if test="chemicalName != null">
+                AND c.name LIKE CONCAT('%', #{chemicalName, jdbcType=VARCHAR}, '%')
+            </if>
+            <if test="startTime != null">
+                AND ur.usage_time &gt;= #{startTime, jdbcType=TIMESTAMP}
+            </if>
+            <if test="endTime != null">
+                AND ur.usage_time &lt;= #{endTime, jdbcType=TIMESTAMP}
+            </if>
+        </where>
+    </select>
+    
+    <!-- 获取用户使用记录列表 -->
+    <select id="getUserUsageRecords" resultMap="BaseResultMap">
+        SELECT
+        <include refid="Base_Column_List"/>
+        FROM usage_record ur
+        LEFT JOIN chemical c ON ur.chemical_id = c.id
+        LEFT JOIN man e ON ur.user_id = e.id
+        WHERE e.name LIKE CONCAT('%', #{userName}, '%')
+        ORDER BY ur.usage_time DESC
+    </select>
+</mapper>

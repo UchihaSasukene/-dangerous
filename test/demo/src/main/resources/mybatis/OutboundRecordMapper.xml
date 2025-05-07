@@ -1,0 +1,283 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+
+<!--出库记录管理sql语句-->
+<mapper namespace="com.vueones.mapper.OutboundRecordMapper">
+    <resultMap type="com.vueones.entity.OutboundRecord" id="BaseResultMap">
+        <result property="id" column="id"/>
+        <result property="chemicalId" column="chemical_id"/>
+        <result property="inventoryId" column="inventory_id"/>
+        <result property="amount" column="amount"/>
+        <result property="unit" column="unit"/>
+        <result property="recipient" column="recipient"/>
+        <result property="purpose" column="purpose"/>
+        <result property="outboundTime" column="outbound_time"/>
+        <result property="batchNo" column="batch_no"/>
+        <result property="operatorId" column="operator_id"/>
+        <result property="notes" column="notes"/>
+        <result property="createTime" column="create_time"/>
+        <!-- 关联化学品信息 -->
+        <association property="chemical" javaType="com.vueones.entity.Chemical">
+            <id property="id" column="c_id"/>
+            <result property="name" column="c_name"/>
+            <result property="category" column="c_category"/>
+            <result property="dangerLevel" column="c_danger_level"/>
+        </association>
+        <!-- 关联库存信息 -->
+        <association property="inventory" javaType="com.vueones.entity.Inventory">
+            <id property="id" column="i_id"/>
+            <result property="location" column="i_location"/>
+            <result property="currentAmount" column="i_current_amount"/>
+        </association>
+        <!-- 关联操作员信息 -->
+        <association property="operator" javaType="com.vueones.entity.Man">
+            <id property="id" column="o_id"/>
+            <result property="name" column="o_name"/>
+            <result property="department" column="o_department"/>
+        </association>
+    </resultMap>
+
+    <sql id="Base_Column_List">
+        o.id, o.chemical_id, o.amount, o.unit, o.recipient, o.purpose,
+        o.outbound_time, o.operator_id, o.notes, o.create_time,o.batch_no,
+        c.id as c_id, c.name as c_name, c.category as c_category, c.danger_level as c_danger_level,
+        i.id as i_id, i.location as i_location, i.current_amount as i_current_amount,
+        m.id as o_id, m.name as o_name, m.department as o_department
+    </sql>
+
+    <!-- 查询列表 -->
+    <select id="selectList" resultMap="BaseResultMap">
+        SELECT
+        <include refid="Base_Column_List"/>
+        FROM outbound_record o
+        LEFT JOIN chemical c ON o.chemical_id = c.id
+        LEFT JOIN inventory i ON o.chemical_id = i.chemical_id
+        LEFT JOIN man m ON o.operator_id = m.id
+        <where>
+            <if test="chemicalId != null">
+                AND o.chemical_id = #{chemicalId, jdbcType=INTEGER}
+            </if>
+            <if test="chemicalName != null and chemicalName != ''">
+                AND c.name LIKE CONCAT('%', #{chemicalName, jdbcType=VARCHAR}, '%')
+            </if>
+            <if test="recipient != null and recipient != ''">
+                AND o.recipient LIKE CONCAT('%', #{recipient, jdbcType=VARCHAR}, '%')
+            </if>
+            <if test="startTime != null">
+                AND o.outbound_time &gt;= #{startTime, jdbcType=TIMESTAMP}
+            </if>
+            <if test="endTime != null">
+                AND o.outbound_time &lt;= #{endTime, jdbcType=TIMESTAMP}
+            </if>
+        </where>
+        ORDER BY o.outbound_time DESC
+        <if test="offset != null and size != null">
+            LIMIT #{offset, jdbcType=INTEGER}, #{size, jdbcType=INTEGER}
+        </if>
+    </select>
+
+    <!-- 根据ID查询 -->
+    <select id="selectById" resultMap="BaseResultMap">
+        SELECT
+        <include refid="Base_Column_List"/>
+        FROM outbound_record o
+        LEFT JOIN chemical c ON o.chemical_id = c.id
+        LEFT JOIN inventory i ON o.chemical_id = i.chemical_id
+        LEFT JOIN man m ON o.operator_id = m.id
+        <where>
+            <if test="id != null">
+                AND o.id = #{id}
+            </if>
+            <if test="chemicalName != null and chemicalName != ''">
+                AND c.name LIKE CONCAT('%', #{chemicalName, jdbcType=VARCHAR}, '%')
+            </if>
+            <if test="recipient != null and recipient != ''">
+                AND o.recipient LIKE CONCAT('%', #{recipient, jdbcType=VARCHAR}, '%')
+            </if>
+        </where>
+    </select>
+
+    <!-- 新增 -->
+    <insert id="insert" parameterType="com.vueones.entity.OutboundRecord" useGeneratedKeys="true" keyProperty="id">
+        INSERT INTO outbound_record (
+            chemical_id, amount, unit, recipient, purpose,
+            outbound_time, batch_no, operator_id, notes, create_time
+        ) VALUES (
+            #{chemicalId, jdbcType=INTEGER},
+            #{amount, jdbcType=DECIMAL},
+            #{unit, jdbcType=VARCHAR},
+            #{recipient, jdbcType=VARCHAR},
+            #{purpose, jdbcType=VARCHAR},
+            #{outboundTime, jdbcType=TIMESTAMP},
+            #{batchNo, jdbcType=VARCHAR},
+            #{operatorId, jdbcType=INTEGER},
+            #{notes, jdbcType=VARCHAR},
+            #{createTime, jdbcType=TIMESTAMP}
+        )
+    </insert>
+
+    <!-- 更新 -->
+    <update id="update" parameterType="com.vueones.entity.OutboundRecord">
+        UPDATE outbound_record
+        <set>
+            <if test="amount != null">amount = #{amount},</if>
+            <if test="unit != null">unit = #{unit},</if>
+            <if test="recipient != null">recipient = #{recipient},</if>
+            <if test="purpose != null">purpose = #{purpose},</if>
+            <if test="outboundTime != null">outbound_time = #{outboundTime},</if>
+            <if test="batchNo != null">batch_no = #{batchNo},</if>
+            <if test="operatorId != null">operator_id = #{operatorId},</if>
+            <if test="notes != null">notes = #{notes},</if>
+            create_time = #{createTime}
+        </set>
+        WHERE id = #{id}
+    </update>
+
+    <!-- 删除 -->
+    <delete id="deleteById">
+        DELETE FROM outbound_record WHERE id = #{id}
+    </delete>
+
+    <!-- 统计某个时间段的出库数量 -->
+    <select id="countByDateRange" resultType="int">
+        SELECT COUNT(*)
+        FROM outbound_record
+        WHERE outbound_time BETWEEN #{startTime, jdbcType=TIMESTAMP} AND #{endTime, jdbcType=TIMESTAMP}
+    </select>
+
+    <!-- 统计化学品总出库量 -->
+    <select id="sumAmountByChemicalId" resultType="java.lang.Double">
+        SELECT IFNULL(SUM(amount), 0)
+        FROM outbound_record
+        <where>
+            <if test="chemicalId != null">
+                AND chemical_id = #{chemicalId, jdbcType=INTEGER}
+            </if>
+            <if test="startTime != null">
+                AND outbound_time &gt;= #{startTime, jdbcType=TIMESTAMP}
+            </if>
+            <if test="endTime != null">
+                AND outbound_time &lt;= #{endTime, jdbcType=TIMESTAMP}
+            </if>
+        </where>
+    </select>
+
+    <!-- 统计总记录数 -->
+    <select id="count" resultType="java.lang.Integer">
+        SELECT COUNT(*) FROM outbound_record o
+        <where>
+            <if test="chemicalId != null">
+                AND o.chemical_id = #{chemicalId, jdbcType=INTEGER}
+            </if>
+            <if test="recipient != null and recipient != ''">
+                AND o.recipient LIKE CONCAT('%', #{recipient, jdbcType=VARCHAR}, '%')
+            </if>
+            <if test="startTime != null">
+                AND o.outbound_time &gt;= #{startTime, jdbcType=TIMESTAMP}
+            </if>
+            <if test="endTime != null">
+                AND o.outbound_time &lt;= #{endTime, jdbcType=TIMESTAMP}
+            </if>
+        </where>
+    </select>
+
+    <!-- 获取总出库记录数量 -->
+    <select id="countTotal" resultType="java.lang.Integer">
+        SELECT COUNT(*) FROM outbound_record
+    </select>
+
+    <!-- 获取月度出库记录数量 -->
+    <select id="getMonthlyOutboundCount" resultType="java.lang.Integer">
+        SELECT COUNT(*) 
+        FROM outbound_record 
+        WHERE MONTH(outbound_time) = MONTH(CURRENT_DATE()) 
+        AND YEAR(outbound_time) = YEAR(CURRENT_DATE())
+    </select>
+
+    <!-- 获取当日出库记录数量 -->
+    <select id="getDailyOutboundCount" resultType="java.lang.Integer">
+        SELECT COUNT(*) 
+        FROM outbound_record 
+        WHERE DATE(outbound_time) = CURRENT_DATE()
+    </select>
+
+    <!-- 批量插入 -->
+    <insert id="batchInsert" parameterType="java.util.List">
+        INSERT INTO outbound_record (
+            chemical_id, amount, unit, recipient, purpose,
+            outbound_time, batch_no, operator_id, notes, create_time
+        ) VALUES 
+        <foreach collection="list" item="item" separator=",">
+            (
+            #{item.chemicalId, jdbcType=INTEGER},
+            #{item.amount, jdbcType=DECIMAL},
+            #{item.unit, jdbcType=VARCHAR},
+            #{item.recipient, jdbcType=VARCHAR},
+            #{item.purpose, jdbcType=VARCHAR},
+            #{item.outboundTime, jdbcType=TIMESTAMP},
+            #{item.batchNo, jdbcType=VARCHAR},
+            #{item.operatorId, jdbcType=INTEGER},
+            #{item.notes, jdbcType=VARCHAR},
+            #{item.createTime, jdbcType=TIMESTAMP}
+            )
+        </foreach>
+    </insert>
+
+    <!-- 统计出库记录数量 -->
+    <select id="countOutboundRecords" resultType="java.lang.Integer">
+        SELECT COUNT(*)
+        FROM outbound_record o
+        LEFT JOIN chemical c ON o.chemical_id = c.id
+        <where>
+            <if test="chemicalId != null">
+                AND o.chemical_id = #{chemicalId, jdbcType=INTEGER}
+            </if>
+            <if test="chemicalName != null and chemicalName != ''">
+                AND c.name LIKE CONCAT('%', #{chemicalName, jdbcType=VARCHAR}, '%')
+            </if>
+            <if test="recipient != null and recipient != ''">
+                AND o.recipient LIKE CONCAT('%', #{recipient, jdbcType=VARCHAR}, '%')
+            </if>
+            <if test="startTime != null">
+                AND o.outbound_time &gt;= #{startTime, jdbcType=TIMESTAMP}
+            </if>
+            <if test="endTime != null">
+                AND o.outbound_time &lt;= #{endTime, jdbcType=TIMESTAMP}
+            </if>
+        </where>
+    </select>
+
+    <!-- 获取月度出库记录次数 -->
+    <select id="getMonthlyOutboundTimes" resultType="java.lang.Integer">
+        SELECT COUNT(DISTINCT DATE_FORMAT(outbound_time, '%Y-%m-%d'))
+        FROM outbound_record o
+        LEFT JOIN chemical c ON o.chemical_id = c.id
+        <where>
+            MONTH(o.outbound_time) = MONTH(CURRENT_DATE()) 
+            AND YEAR(o.outbound_time) = YEAR(CURRENT_DATE())
+            <if test="chemicalId != null">
+                AND o.chemical_id = #{chemicalId, jdbcType=INTEGER}
+            </if>
+            <if test="chemicalName != null and chemicalName != ''">
+                AND c.name LIKE CONCAT('%', #{chemicalName, jdbcType=VARCHAR}, '%')
+            </if>
+        </where>
+    </select>
+
+    <!-- 获取当日出库记录次数 -->
+    <select id="getDailyOutboundTimes" resultType="java.lang.Integer">
+        SELECT COUNT(DISTINCT DATE_FORMAT(outbound_time, '%Y-%m-%d %H:%i'))
+        FROM outbound_record o
+        LEFT JOIN chemical c ON o.chemical_id = c.id
+        <where>
+            DATE(o.outbound_time) = CURRENT_DATE()
+            <if test="chemicalId != null">
+                AND o.chemical_id = #{chemicalId, jdbcType=INTEGER}
+            </if>
+            <if test="chemicalName != null and chemicalName != ''">
+                AND c.name LIKE CONCAT('%', #{chemicalName, jdbcType=VARCHAR}, '%')
+            </if>
+        </where>
+    </select>
+</mapper>

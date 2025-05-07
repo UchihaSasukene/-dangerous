@@ -1,0 +1,184 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+
+<!--库存管理sql语句&ndash;&gt;-->
+<mapper namespace="com.vueones.mapper.InventoryMapper">
+    <resultMap id="BaseResultMap" type="com.vueones.entity.Inventory">
+        <id column="id" jdbcType="INTEGER" property="id" />
+        <result column="chemical_id" jdbcType="INTEGER" property="chemicalId" />
+        <result column="current_amount" jdbcType="DOUBLE" property="currentAmount" />
+        <result column="unit" jdbcType="VARCHAR" property="unit" />
+        <result column="location" jdbcType="VARCHAR" property="location" />
+        <result column="last_check_time" jdbcType="TIMESTAMP" property="lastCheckTime" />
+        <result column="create_time" jdbcType="TIMESTAMP" property="createTime" />
+        <result column="update_time" jdbcType="TIMESTAMP" property="updateTime" />
+        <!-- 关联化学品信息 -->
+        <association property="chemical" javaType="com.vueones.entity.Chemical">
+            <id property="id" column="c_id"/>
+            <result property="name" column="c_name"/>
+            <result property="warningThreshold" column="c_warning_threshold"/>
+        </association>
+    </resultMap>
+
+    <sql id="Base_Column_List">
+        id, chemical_id,current_amount, unit, location, last_check_time, create_time, update_time
+    </sql>
+
+    <sql id="Join_Column_List">
+        i.id, i.chemical_id,i.current_amount, i.unit, i.location , i.last_check_time, i.create_time, i.update_time,
+        c.id as c_id, c.name as c_name, c.warning_threshold as c_warning_threshold
+    </sql>
+
+    <!-- 查询列表列表数据 -->
+    <select id="getInventoryList" resultMap="BaseResultMap">
+        select 
+        <include refid="Join_Column_List" />
+        from inventory i
+        left join chemical c on i.chemical_id = c.id
+        <where>
+            <if test="chemicalId != null">
+                and i.chemical_id = #{chemicalId,jdbcType=INTEGER}
+            </if>
+            <if test="chemicalName != null and chemicalName != ''">
+                and c.name like concat('%', #{chemicalName,jdbcType=VARCHAR}, '%')
+            </if>
+            <if test="location != null and location != ''">
+                and i.location like concat('%', #{location,jdbcType=VARCHAR}, '%')
+            </if>
+        </where>
+        order by i.update_time desc
+    </select>
+
+    <!-- 条件查询 -->
+    <select id="getInventoryById" parameterType="java.lang.Integer" resultMap="BaseResultMap">
+        select 
+        <include refid="Join_Column_List" />
+        from inventory i
+        left join chemical c on i.chemical_id = c.id
+        <where>
+            <if test="id != null">
+                and i.id = #{id,jdbcType=INTEGER}
+            </if>
+            <if test="chemicalId != null">
+                and i.chemical_id = #{chemicalId,jdbcType=INTEGER}
+            </if>
+            <if test="chemicalName != null and chemicalName != ''">
+                and c.name like concat('%', #{chemicalName,jdbcType=VARCHAR}, '%')
+            </if>
+            <if test="location != null and location != ''">
+                and i.location like concat('%', #{location,jdbcType=VARCHAR}, '%')
+            </if>
+        </where>
+    </select>
+
+
+    <!-- 新增 -->
+    <insert id="insert" parameterType="com.vueones.entity.Inventory" useGeneratedKeys="true" keyProperty="id">
+        insert into inventory (chemical_id, current_amount, 
+            unit, location, last_check_time, 
+            create_time, update_time)
+        values (#{chemicalId,jdbcType=INTEGER}, #{currentAmount,jdbcType=DOUBLE}, 
+            #{unit,jdbcType=VARCHAR}, #{location,jdbcType=VARCHAR}, #{lastCheckTime,jdbcType=TIMESTAMP}, 
+            now(), now())
+    </insert>
+
+    <!-- 更新 -->
+    <update id="updateInventory" parameterType="com.vueones.entity.Inventory">
+        update inventory
+        <set>
+            <if test="chemicalId != null">
+                chemical_id = #{chemicalId,jdbcType=INTEGER},
+            </if>
+            <if test="currentAmount != null">
+                current_amount = #{currentAmount,jdbcType=DOUBLE},
+            </if>
+            <if test="unit != null">
+                unit = #{unit,jdbcType=VARCHAR},
+            </if>
+            <if test="location != null">
+                location = #{location,jdbcType=VARCHAR},
+            </if>
+            <if test="lastCheckTime != null">
+                last_check_time = #{lastCheckTime,jdbcType=TIMESTAMP},
+            </if>
+            update_time = now()
+        </set>
+        where id = #{id,jdbcType=INTEGER}
+    </update>
+
+    <!-- 删除 -->
+    <delete id="deleteInventory" parameterType="java.lang.Integer">
+        delete from inventory
+        where id = #{id,jdbcType=INTEGER}
+    </delete>
+
+    <!-- 更新库存数量 -->
+    <update id="updateInventoryAmount">
+        update inventory
+        set current_amount = #{amount,jdbcType=DOUBLE},
+            last_check_time = now(),
+            update_time = now()
+        where id = #{id,jdbcType=INTEGER}
+    </update>
+
+    <!-- 获取低于预警阈值的库存记录 -->
+    <select id="getBelowThresholdInventory" resultMap="BaseResultMap">
+        select 
+        <include refid="Join_Column_List" />
+        from inventory i
+        join chemical c on i.chemical_id = c.id
+        where i.current_amount &lt;= c.warning_threshold
+        order by i.update_time desc
+    </select>
+
+    <!-- 批量更新库存 -->
+    <update id="batchUpdateInventory">
+        <foreach collection="list" item="item" separator=";">
+            update inventory
+            <set>
+                <if test="item.chemicalId != null">chemical_id = #{item.chemicalId,jdbcType=INTEGER},</if>
+                <if test="item.currentAmount != null">current_amount = #{item.currentAmount,jdbcType=DOUBLE},</if>
+                <if test="item.unit != null and item.unit != ''">unit = #{item.unit,jdbcType=VARCHAR},</if>
+                <if test="item.location != null and item.location != ''">location = #{item.location,jdbcType=VARCHAR},</if>
+                <if test="item.lastCheckTime != null">last_check_time = #{item.lastCheckTime,jdbcType=TIMESTAMP},</if>
+                update_time = now()
+            </set>
+            where id = #{item.id,jdbcType=INTEGER}
+        </foreach>
+    </update>
+
+    <!-- 获取化学品总库存量 -->
+    <select id="getTotalAmount" parameterType="java.lang.Integer" resultType="java.lang.Double">
+        select sum(current_amount)
+        from inventory
+        where chemical_id = #{chemicalId,jdbcType=INTEGER}
+    </select>
+
+    <!-- 入库操作 -->
+    <update id="processStorageIn">
+        update inventory
+        set current_amount = current_amount + #{amount,jdbcType=DOUBLE},
+            last_check_time = now(),
+            update_time = now()
+        <where>
+            <if test="chemicalId != null">
+                and chemical_id = #{chemicalId,jdbcType=INTEGER}
+            </if>
+        </where>
+    </update>
+
+    <!-- 出库操作 -->
+    <update id="processStorageOut">
+        update inventory
+        set current_amount = current_amount - #{amount,jdbcType=DOUBLE},
+            last_check_time = now(),
+            update_time = now()
+        <where>
+            <if test="chemicalId != null">
+                and chemical_id = #{chemicalId,jdbcType=INTEGER}
+            </if>
+            and current_amount >= #{amount,jdbcType=DOUBLE}
+        </where>
+    </update>
+</mapper>
+
