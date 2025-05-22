@@ -146,16 +146,12 @@
         </el-row>
       </el-card>
     </div>
-    <!-- <template>
-      <div>
-      <div ref="myChart" style="width: 400px; height: 400px; background-color: #ffffff; padding: 20px; border-radius: 20px;"></div>
-      </div>
-    </template> -->
-
     <!-- 柱状图 -->
-     <template>
-      <div ref="eChart" id="eChart" style="width: 400px; height: 400px; background-color: #ffffff; padding: 20px; border-radius: 20px;"></div>
-     </template>
+      <template>
+        <div ref="echarts" :style="myChartStyle">
+        </div>
+      </template>
+
     <!-- 分页 -->
     <div class="pagination-container">
       <el-pagination
@@ -186,7 +182,7 @@
     <el-dialog :title="form.id ? '编辑使用记录' : '新增使用记录'" :visible.sync="dialogVisible" width="50%">
       <el-form :model="form" :rules="rules" ref="form" label-width="100px">
         <el-form-item label="化学品" prop="chemicalId">
-          <el-select v-model="form.chemicalId" placeholder="请选择化学品" style="width: 100%;">
+          <el-select v-model="form.chemicalId" placeholder="请选择化学品" style="width :100%;">
             <el-option
               v-for="item in chemicalOptions"
               :key="item.id"
@@ -236,34 +232,10 @@
 <script>
 import * as echarts from 'echarts';
 
+
 export default {
-  data() {
-    return {
-      xData: ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"],
-      yData: [23, 24, 18, 25, 27, 28, 25],
-      myChartStyle: { float: "left", width: "100%", height: "400px" }
-    };
-  },
-  mounted() {
-    this.initEcharts();
-  },
-  methods: {
-    initEcharts() {
-      const option = {
-        xAxis: { data: this.xData },
-        yAxis: {},
-        series: [{ type: "bar", data: this.yData }]
-      };
-      const myChart = echarts.init(document.getElementById("mychart"));
-      myChart.setOption(option);
-      window.addEventListener("resize", () => {
-        myChart.resize();
-      });
-    }
-  },
   name: 'Record',
   data() {
-
     return {
       // 查询条件
       searchForm: {
@@ -286,6 +258,10 @@ export default {
         pageSize: 5,
         total: 0
       },
+      //柱状图
+      xData: ['记录数量', '使用总量', '平均使用量'],
+      myChart: null,
+      myChartStyle: { width: '100%', height: '400px' },
       // 统计数据
       statistics: {
         todayCount: 0,
@@ -342,6 +318,9 @@ export default {
     this.fetchUsers()
     this.fetchStatistics()
   },
+  mounted() {
+    this.initEcharts();
+  },
   methods: {
     // 获取表格数据
     async fetchData() {
@@ -390,6 +369,28 @@ export default {
         this.$message.error('获取记录失败:' + (error.message || error))
       }
       this.loading = false
+    },
+    //柱状图内容控制
+    initEcharts() {
+      if (!this.$refs.echarts) return;
+      if (!this.myChart) {
+        this.myChart = echarts.init(this.$refs.echarts);
+        window.addEventListener('resize', () => {
+          this.myChart && this.myChart.resize();
+        });
+      }
+      const yData = [
+        Number(this.summary.count),
+        Number(this.summary.totalAmount),
+        Number(this.summary.avgAmount)
+      ];
+      const option = {
+        tooltip: {},
+        xAxis: { data: this.xData },
+        yAxis: {},
+        series: [{ type: 'bar', data: yData }]
+      };
+      this.myChart.setOption(option);
     },
     // 获取化学品列表
     async fetchChemicals() {
@@ -612,6 +613,7 @@ export default {
         avgAmount,
         commonUnit
       }
+      this.initEcharts();
     }
   }
 }
