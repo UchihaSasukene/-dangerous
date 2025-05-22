@@ -1,0 +1,188 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+
+<!--预警记录管理sql语句-->
+<mapper namespace="com.vueones.mapper.WarningRecordMapper">
+    <resultMap type="com.vueones.entity.WarningRecord" id="BaseResultMap">
+        <result property="id" column="id"/>
+        <result property="chemicalId" column="chemical_id"/>
+        <result property="warningType" column="warning_type"/>
+        <result property="warningLevel" column="warning_level"/>
+        <result property="warningContent" column="warning_content"/>
+        <result property="warningTime" column="warning_time"/>
+        <result property="handleStatus" column="status"/>
+        <result property="handleTime" column="handle_time"/>
+        <result property="handler" column="handler"/>
+        <result property="handleResult" column="handle_result"/>
+        <result property="createTime" column="create_time"/>
+        <result property="updateTime" column="update_time"/>
+        <!-- 关联化学品信息 -->
+        <association property="chemical" javaType="com.vueones.entity.Chemical">
+            <id property="id" column="c_id"/>
+            <result property="name" column="c_name"/>
+            <result property="category" column="c_category"/>
+            <result property="dangerLevel" column="c_danger_level"/>
+            <result property="warningThreshold" column="c_warning_threshold"/>
+        </association>
+        <!-- 关联库存信息 -->
+        <association property="inventory" javaType="com.vueones.entity.Inventory">
+            <id property="id" column="i_id"/>
+            <result property="location" column="i_location"/>
+            <result property="currentAmount" column="i_current_amount"/>
+        </association>
+    </resultMap>
+
+    <sql id="Base_Column_List">
+        w.id, w.chemical_id, w.warning_type, w.warning_level, w.warning_content,
+        w.warning_time, w.status, w.handle_time, w.handler, w.handle_result,
+        c.id as c_id, c.name as c_name, c.category as c_category,
+        c.danger_level as c_danger_level, c.warning_threshold as c_warning_threshold,
+        i.id as i_id, i.location as i_location, i.current_amount as i_current_amount
+    </sql>
+
+    <!-- 查询列表 -->
+    <select id="selectList" resultMap="BaseResultMap">
+        SELECT
+        <include refid="Base_Column_List"/>
+        FROM warning_record w
+        LEFT JOIN chemical c ON w.chemical_id = c.id
+        LEFT JOIN inventory i ON c.id = i.chemical_id
+        <where>
+            <if test="chemicalName != null and chemicalName != ''">
+                AND c.name LIKE CONCAT('%', #{chemicalName, jdbcType=VARCHAR}, '%')
+            </if>
+            <if test="warningType != null and warningType != ''">
+                AND w.warning_type = #{warningType}
+            </if>
+            <if test="warningLevel != null and warningLevel != ''">
+                AND w.warning_level = #{warningLevel}
+            </if>
+            <if test="status != null and status != ''">
+                AND w.status = #{status}
+            </if>
+            <if test="startTime != null">
+                AND w.warning_time &gt;= #{startTime}
+            </if>
+            <if test="endTime != null">
+                AND w.warning_time &lt;= #{endTime}
+            </if>
+        </where>
+        ORDER BY w.warning_time DESC
+        <if test="offset != null and limit != null">
+            LIMIT #{offset}, #{limit}
+        </if>
+    </select>
+
+    <!-- 统计总数 -->
+    <select id="countWarningRecords" resultType="int">
+        SELECT COUNT(*)
+        FROM warning_record w
+        LEFT JOIN chemical c ON w.chemical_id = c.id
+        <where>
+            <if test="chemicalName != null and chemicalName != ''">
+                AND c.name LIKE CONCAT('%', #{chemicalName, jdbcType=VARCHAR}, '%')
+            </if>
+            <if test="warningType != null and warningType != ''">
+                AND w.warning_type = #{warningType}
+            </if>
+            <if test="warningLevel != null and warningLevel != ''">
+                AND w.warning_level = #{warningLevel}
+            </if>
+            <if test="status != null and status != ''">
+                AND w.status = #{status}
+            </if>
+            <if test="startTime != null">
+                AND w.warning_time &gt;= #{startTime}
+            </if>
+            <if test="endTime != null">
+                AND w.warning_time &lt;= #{endTime}
+            </if>
+        </where>
+    </select>
+
+    <!-- 根据ID查询 -->
+    <select id="selectById" resultMap="BaseResultMap">
+        SELECT
+        <include refid="Base_Column_List"/>
+        FROM warning_record w
+        LEFT JOIN chemical c ON w.chemical_id = c.id
+        LEFT JOIN inventory i ON c.id = i.chemical_id
+        <where>
+            <if test="id != null">
+                AND w.id = #{id}
+            </if>
+            <if test="chemicalName != null and chemicalName != ''">
+                AND c.name LIKE CONCAT('%', #{chemicalName, jdbcType=VARCHAR}, '%')
+            </if>
+        </where>
+    </select>
+
+    <!-- 新增 -->
+    <insert id="insert" parameterType="com.vueones.entity.WarningRecord" useGeneratedKeys="true" keyProperty="id">
+        INSERT INTO warning_record (
+            chemical_id, warning_type, warning_level, warning_content,
+            warning_time, status, handle_time, handler, handle_result
+        ) VALUES (
+            #{chemicalId}, #{warningType}, #{warningLevel}, #{warningContent},
+            #{warningTime}, #{handleStatus}, #{handleTime}, #{handler}, #{handleResult}
+        )
+    </insert>
+
+    <!-- 更新 -->
+    <update id="update" parameterType="com.vueones.entity.WarningRecord">
+        UPDATE warning_record
+        <set>
+            <if test="chemicalId != null">chemical_id = #{chemicalId},</if>
+            <if test="warningType != null">warning_type = #{warningType},</if>
+            <if test="warningLevel != null">warning_level = #{warningLevel},</if>
+            <if test="warningContent != null">warning_content = #{warningContent},</if>
+            <if test="warningTime != null">warning_time = #{warningTime},</if>
+            <if test="handleStatus != null">status = #{handleStatus},</if>
+            <if test="handleTime != null">handle_time = #{handleTime},</if>
+            <if test="handler != null">handler = #{handler},</if>
+            <if test="handleResult != null">handle_result = #{handleResult}</if>
+        </set>
+        WHERE id = #{id}
+    </update>
+
+    <!-- 删除 -->
+    <delete id="deleteById">
+        DELETE FROM warning_record WHERE id = #{id}
+    </delete>
+
+    <!-- 统计未处理的预警数量 -->
+    <select id="countUnhandledWarnings" resultType="int">
+        SELECT COUNT(*)
+        FROM warning_record
+        WHERE status = 'unprocessed'
+    </select>
+    
+    <!-- 查询未处理的预警 -->
+    <select id="selectUnhandledWarnings" resultMap="BaseResultMap">
+        SELECT
+        <include refid="Base_Column_List"/>
+        FROM warning_record w
+        LEFT JOIN chemical c ON w.chemical_id = c.id
+        LEFT JOIN inventory i ON c.id = i.chemical_id
+        WHERE w.status = 'unprocessed'
+        ORDER BY w.warning_time DESC
+    </select>
+
+    <!-- 统计各预警级别的数量 -->
+    <select id="countByWarningLevel" resultType="map">
+        SELECT warning_level, COUNT(*) as count
+        FROM warning_record
+        GROUP BY warning_level
+    </select>
+
+    <!-- 更新状态 -->
+    <update id="updateStatus">
+        UPDATE warning_record
+        SET status = #{status},
+            handler = #{handler},
+            handle_result = #{handleResult},
+            handle_time = NOW()
+        WHERE id = #{id}
+    </update>
+</mapper>

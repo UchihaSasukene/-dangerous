@@ -1,0 +1,50 @@
++-------------------+       +-------------------+       +-------------------+
+|     chemical      |       |     inventory     |       |   warning_record  |
++-------------------+       +-------------------+       +-------------------+
+| PK id             |<----->| PK id             |       | PK id             |
+| name              |       | FK chemical_id    |<----->| FK chemical_id    |
+| category          |       | current_amount    |       | warning_type      |
+| danger_level      |       | unit              |       | warning_level     |
+| storage_condition |       | location          |       | warning_content   |
+| warning_threshold |       | last_check_time   |       | status            |
+| description       |       | create_time       |       | warning_time      |
++-------------------+       +-------------------+       | handle_time       |
+        ^                                               | handler           |
+        |                                               | handle_result     |
+        |                                               | create_time       |
+        |                                               +-------------------+
+        |
+        |
+        |                   +-------------------+
+        |                   |   usage_record    |
+        +------------------>+-------------------+
+                            | PK id             |
+                            | FK chemical_id    |
+                            | FK user_id        |<----+
+                            | amount            |     |
+                            | unit              |     |
+                            | usage_time        |     |
+                            | usage_purpose     |     |
+                            | notes             |     |
+                            | create_time       |     |
+                            +-------------------+     |
+                                                      |
+                                                      |
+                            +-------------------+     |
+                            |        man        |     |
+                            +-------------------+     |
+                            | PK id             |-----+
+                            | name              |
+                            | gender            |
+                            | phone             |
+                            | email             |
+                            | department        |
+                            | position          |
+                            | create_time       |
+                            +-------------------+
+
+关系说明:
+1. 一个化学品(chemical)可以有多个库存记录(inventory)
+2. 一个化学品(chemical)可以有多个预警记录(warning_record)
+3. 一个化学品(chemical)可以有多个使用记录(usage_record)
+4. 一个人员(man)可以有多个使用记录(usage_record) 

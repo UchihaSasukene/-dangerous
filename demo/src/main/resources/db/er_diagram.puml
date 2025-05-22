@@ -1,0 +1,72 @@
+@startuml 危化品管理系统ER图
+
+' 实体定义
+entity "化学品(chemical)" as chemical {
+  * id : int <<PK>>
+  --
+  * name : varchar(100) <<UQ>>
+  * category : varchar(50)
+  * danger_level : varchar(50)
+  * storage_condition : varchar(100)
+  * warning_threshold : decimal(10,2)
+  description : varchar(500)
+}
+
+entity "人员(man)" as man {
+  * id : int <<PK>>
+  --
+  * name : varchar(50)
+  gender : varchar(10)
+  phone : varchar(20)
+  email : varchar(100)
+  department : varchar(50)
+  position : varchar(50)
+  * create_time : datetime
+}
+
+entity "库存(inventory)" as inventory {
+  * id : int <<PK>>
+  --
+  * chemical_id : int <<FK>>
+  * current_amount : decimal(10,2)
+  * unit : varchar(20)
+  location : varchar(100)
+  last_check_time : datetime
+  * create_time : datetime
+}
+
+entity "预警记录(warning_record)" as warning {
+  * id : int <<PK>>
+  --
+  * chemical_id : int <<FK>>
+  * warning_type : varchar(50)
+  * warning_level : varchar(50)
+  * warning_content : varchar(500)
+  * status : varchar(50)
+  * warning_time : datetime
+  handle_time : datetime
+  handler : varchar(100)
+  handle_result : varchar(500)
+  * create_time : datetime
+}
+
+entity "使用记录(usage_record)" as usage {
+  * id : int <<PK>>
+  --
+  * chemical_id : int <<FK>>
+  * user_id : int <<FK>>
+  * amount : decimal(10,2)
+  * unit : varchar(20)
+  * usage_time : datetime
+  * usage_purpose : varchar(200)
+  notes : varchar(500)
+  * create_time : datetime
+}
+
+' 关系定义
+chemical ||--o{ inventory : "拥有"
+chemical ||--o{ warning : "触发"
+chemical ||--o{ usage : "被使用"
+man ||--o{ usage : "使用"
+
+@enduml 
