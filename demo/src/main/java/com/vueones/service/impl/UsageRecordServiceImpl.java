@@ -3,23 +3,41 @@ package com.vueones.service.impl;
 import com.vueones.entity.UsageRecord;
 import com.vueones.mapper.UsageRecordMapper;
 import com.vueones.service.IUsageRecordService;
+import com.vueones.service.IInventoryService;
+import com.vueones.util.RedisUtil;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.cache.annotation.CacheEvict;
+import org.springframework.cache.annotation.Cacheable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.util.List;
-import java.util.ArrayList;
 import java.util.Date;
+import java.util.ArrayList;
+import java.util.concurrent.TimeUnit;
 
 @Service
 public class UsageRecordServiceImpl implements IUsageRecordService {
     
     private static final Logger log = LoggerFactory.getLogger(UsageRecordServiceImpl.class);
     
+    // 缓存相关常量
+    private static final String CACHE_KEY_USAGE_RECORD = "usage_record:";
+    private static final String CACHE_KEY_USAGE_RECORD_LIST = "usage_record_list:";
+    private static final String CACHE_KEY_USAGE_RECORD_COUNT = "usage_record_count:";
+    private static final String CACHE_KEY_USAGE_RECORD_SUM = "usage_record_sum:";
+    private static final long CACHE_EXPIRE_TIME = 30; // 缓存过期时间（分钟）
+    
     @Autowired
     private UsageRecordMapper usageRecordMapper;
+    
+    @Autowired
+    private IInventoryService inventoryService;
+    
+    @Autowired
+    private RedisUtil redisUtil;
     
     /**
      * 添加使用记录
@@ -47,10 +65,15 @@ public class UsageRecordServiceImpl implements IUsageRecordService {
      */
     @Override
     @Transactional
+    @CacheEvict(value = {"usageRecord", "usageRecordList", "usageRecordCount", "usageRecordSum"}, allEntries = true)
     public int updateUsageRecord(UsageRecord record) {
         if (record == null || record.getId() == null) {
             return 0;
         }
+        // 清除单个记录的缓存
+        String cacheKey = CACHE_KEY_USAGE_RECORD + record.getId();
+        redisUtil.del(cacheKey);
+        
         return usageRecordMapper.update(record);
     }
     /**
@@ -60,10 +83,15 @@ public class UsageRecordServiceImpl implements IUsageRecordService {
      */
     @Override
     @Transactional
+    @CacheEvict(value = {"usageRecord", "usageRecordList", "usageRecordCount", "usageRecordSum"}, allEntries = true)
     public int deleteUsageRecord(Integer id) {
         if (id == null) {
             return 0;
         }
+        // 清除单个记录的缓存
+        String cacheKey = CACHE_KEY_USAGE_RECORD + id;
+        redisUtil.del(cacheKey);
+        
         return usageRecordMapper.deleteById(id);
     }
     /**
@@ -72,11 +100,30 @@ public class UsageRecordServiceImpl implements IUsageRecordService {
      * @return 使用记录
      */
     @Override
+    @Cacheable(value = "usageRecord", key = "#id", unless = "#result == null")
     public UsageRecord getUsageRecordById(Integer id) {
         if (id == null) {
             return null;
         }
-        return usageRecordMapper.selectById(id);
+        log.info("从数据库查询使用记录, id: {}", id);
+        
+        // 尝试从缓存获取
+        String cacheKey = CACHE_KEY_USAGE_RECORD + id;
+        Object cachedRecord = redisUtil.get(cacheKey);
+        if (cachedRecord != null) {
+            log.info("从缓存获取使用记录, id: {}", id);
+            return (UsageRecord) cachedRecord;
+        }
+        
+        // 从数据库获取
+        UsageRecord record = usageRecordMapper.selectById(id);
+        
+        // 放入缓存
+        if (record != null) {
+            redisUtil.set(cacheKey, record, TimeUnit.MINUTES.toSeconds(CACHE_EXPIRE_TIME));
+        }
+        
+        return record;
     }
     /**
      * 根据化学品名称、用户名称、开始时间、结束时间查询使用记录
@@ -87,6 +134,7 @@ public class UsageRecordServiceImpl implements IUsageRecordService {
      * @return 使用记录列表
      */
     @Override
+    @Cacheable(value = "usageRecordList", key = "#chemicalName + '_' + #userName + '_' + #startTime + '_' + #endTime", unless = "#result == null || #result.isEmpty()")
     public List<UsageRecord> getUsageRecordList(String chemicalName, String userName,
                                                Date startTime, Date endTime) {
         // 过滤掉空字符串，转换为 null
@@ -95,6 +143,20 @@ public class UsageRecordServiceImpl implements IUsageRecordService {
         
         log.info("Service层处理后的参数: chemicalName={}, userName={}, startTime={}, endTime={}", 
                 chemicalName, userName, startTime, endTime);
+        
+        // 构建缓存key
+        String cacheKey = CACHE_KEY_USAGE_RECORD_LIST + 
+                (chemicalName != null ? chemicalName : "null") + "_" + 
+                (userName != null ? userName : "null") + "_" + 
+                (startTime != null ? startTime.getTime() : "null") + "_" + 
+                (endTime != null ? endTime.getTime() : "null");
+        
+        // 尝试从缓存获取
+        Object cachedList = redisUtil.get(cacheKey);
+        if (cachedList != null) {
+            log.info("从缓存获取使用记录列表");
+            return (List<UsageRecord>) cachedList;
+        }
         
         // 允许部分参数为空，执行查询
         List<UsageRecord> result = usageRecordMapper.selectList(chemicalName, userName, startTime, endTime);
@@ -106,6 +168,11 @@ public class UsageRecordServiceImpl implements IUsageRecordService {
                     result.get(0).getId(), 
                     result.get(0).getChemical() != null ? result.get(0).getChemical().getName() : null,
                     result.get(0).getUser() != null ? result.get(0).getUser().getName() : null);
+        }
+        
+        // 放入缓存
+        if (result != null && !result.isEmpty()) {
+            redisUtil.set(cacheKey, result, TimeUnit.MINUTES.toSeconds(CACHE_EXPIRE_TIME));
         }
         
         return result;
@@ -130,12 +197,31 @@ public class UsageRecordServiceImpl implements IUsageRecordService {
      * @return 化学品总使用量
      */
     @Override
+    @Cacheable(value = "usageRecordSum", key = "#chemicalName + '_' + #startTime + '_' + #endTime")
     public String getTotalUsageAmount(String chemicalName, Date startTime, Date endTime) {
-        Double total = usageRecordMapper.getTotalAmount(chemicalName, startTime, endTime);
-        if (total == null) {
-            return "0";
+        log.info("从数据库计算使用总量, chemicalName: {}, startTime: {}, endTime: {}", 
+                chemicalName, startTime, endTime);
+        
+        // 构建缓存key
+        String cacheKey = CACHE_KEY_USAGE_RECORD_SUM + 
+                (chemicalName != null ? chemicalName : "null") + "_" + 
+                (startTime != null ? startTime.getTime() : "null") + "_" + 
+                (endTime != null ? endTime.getTime() : "null");
+        
+        // 尝试从缓存获取
+        Object cachedSum = redisUtil.get(cacheKey);
+        if (cachedSum != null) {
+            log.info("从缓存获取使用总量");
+            return cachedSum.toString();
         }
-        return total.toString();
+        
+        Double total = usageRecordMapper.getTotalAmount(chemicalName, startTime, endTime);
+        String result = total == null ? "0" : total.toString();
+        
+        // 放入缓存
+        redisUtil.set(cacheKey, result, TimeUnit.MINUTES.toSeconds(CACHE_EXPIRE_TIME));
+        
+        return result;
     }
     /**
      * 批量添加使用记录
@@ -144,6 +230,7 @@ public class UsageRecordServiceImpl implements IUsageRecordService {
      */
     @Override
     @Transactional
+    @CacheEvict(value = {"usageRecordList", "usageRecordCount", "usageRecordSum"}, allEntries = true)
     public int batchAddUsageRecords(List<UsageRecord> records) {
         if (records == null || records.isEmpty()) {
             return 0;
@@ -156,6 +243,9 @@ public class UsageRecordServiceImpl implements IUsageRecordService {
                 record.setCreateTime(now);
             }
         }
+        
+        // 清除相关缓存
+        log.info("批量添加使用记录，清除相关缓存");
         
         return usageRecordMapper.batchInsert(records);
     }
@@ -255,4 +345,4 @@ public class UsageRecordServiceImpl implements IUsageRecordService {
         // 同上，需要查询化学品名称，这里简单实现
         return 0.0;
     }
-} 
+}

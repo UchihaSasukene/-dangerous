@@ -3,19 +3,36 @@ package com.vueones.service.impl;
 import com.vueones.entity.Inventory;
 import com.vueones.mapper.InventoryMapper;
 import com.vueones.service.IInventoryService;
+import com.vueones.util.RedisUtil;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.cache.annotation.CacheEvict;
+import org.springframework.cache.annotation.Cacheable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.util.Date;
 import java.util.List;
 import java.util.ArrayList;
+import java.util.concurrent.TimeUnit;
 
 @Service
 public class InventoryServiceImpl implements IInventoryService {
     
+    private static final Logger log = LoggerFactory.getLogger(InventoryServiceImpl.class);
+    
+    // 缓存相关常量
+    private static final String CACHE_KEY_INVENTORY = "inventory:";
+    private static final String CACHE_KEY_INVENTORY_LIST = "inventory_list:";
+    private static final String CACHE_KEY_INVENTORY_COUNT = "inventory_count:";
+    private static final long CACHE_EXPIRE_TIME = 30; // 缓存过期时间（分钟）
+    
     @Autowired
     private InventoryMapper inventoryMapper;
+    
+    @Autowired
+    private RedisUtil redisUtil;
     
 
     /**
@@ -25,6 +42,7 @@ public class InventoryServiceImpl implements IInventoryService {
      */
     @Override
     @Transactional
+    @CacheEvict(value = {"inventoryList", "inventoryCount"}, allEntries = true)
     public int addInventory(Inventory inventory) {
         if (inventory.getCreateTime() == null) {
             inventory.setCreateTime(new Date());
@@ -39,7 +57,12 @@ public class InventoryServiceImpl implements IInventoryService {
      */
     @Override
     @Transactional
+    @CacheEvict(value = {"inventory", "inventoryList", "inventoryCount"}, allEntries = true)
     public int updateInventory(Inventory inventory) {
+        // 清除单个记录的缓存
+        String cacheKey = CACHE_KEY_INVENTORY + inventory.getId();
+        redisUtil.del(cacheKey);
+        
         inventory.setUpdateTime(new Date());
         return inventoryMapper.updateInventory(inventory);
     }
@@ -50,7 +73,12 @@ public class InventoryServiceImpl implements IInventoryService {
      */
     @Override
     @Transactional
+    @CacheEvict(value = {"inventory", "inventoryList", "inventoryCount"}, allEntries = true)
     public int deleteInventory(Integer id) {
+        // 清除单个记录的缓存
+        String cacheKey = CACHE_KEY_INVENTORY + id;
+        redisUtil.del(cacheKey);
+        
         return inventoryMapper.deleteInventory(id);
     }
     /**
@@ -59,8 +87,27 @@ public class InventoryServiceImpl implements IInventoryService {
      * @return 库存信息
      */
     @Override
+    @Cacheable(value = "inventory", key = "#id", unless = "#result == null")
     public Inventory getInventoryById(Integer id) {
-        return inventoryMapper.getInventoryById(id);
+        log.info("从数据库查询库存记录, id: {}", id);
+        
+        // 尝试从缓存获取
+        String cacheKey = CACHE_KEY_INVENTORY + id;
+        Object cachedInventory = redisUtil.get(cacheKey);
+        if (cachedInventory != null) {
+            log.info("从缓存获取库存记录, id: {}", id);
+            return (Inventory) cachedInventory;
+        }
+        
+        // 从数据库获取
+        Inventory inventory = inventoryMapper.getInventoryById(id);
+        
+        // 放入缓存
+        if (inventory != null) {
+            redisUtil.set(cacheKey, inventory, TimeUnit.MINUTES.toSeconds(CACHE_EXPIRE_TIME));
+        }
+        
+        return inventory;
     }
     /**
      * 根据化学品id和存储位置查询库存
@@ -123,7 +170,12 @@ public class InventoryServiceImpl implements IInventoryService {
      */
     @Override
     @Transactional
+    @CacheEvict(value = {"inventory", "inventoryList"}, allEntries = true)
     public int updateInventoryAmount(Integer id, Double amount) {
+        // 清除相关缓存
+        String cacheKey = CACHE_KEY_INVENTORY + id;
+        redisUtil.del(cacheKey);
+        
         return inventoryMapper.updateInventoryAmount(id, amount);
     }
     /**

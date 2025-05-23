@@ -5,9 +5,16 @@ import com.fasterxml.jackson.annotation.JsonIdentityInfo;
 import com.fasterxml.jackson.annotation.ObjectIdGenerators;
 import com.fasterxml.jackson.annotation.JsonFormat;
 
+/**
+ * UsageRecord 类表示使用记录。
+ * 它包含了使用记录的各种属性，如记录ID、危化品ID、用户ID、危化品名称、用户名、使用量、使用单位、使用时间、使用目的、备注、创建时间等。
+ * 此外，它还包含了与危化品和用户相关联的信息。
+ */
+//redis序列化
 @JsonIdentityInfo(
     generator = ObjectIdGenerators.PropertyGenerator.class, 
-    property = "id"
+    property = "id",
+    scope = UsageRecord.class
 )
 public class UsageRecord {
     private Integer id;

@@ -3,26 +3,62 @@ package com.vueones.service.impl;
 import com.vueones.entity.Chemical;
 import com.vueones.mapper.ChemicalMapper;
 import com.vueones.service.IChemicalService;
+import com.vueones.util.RedisUtil;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.cache.annotation.CacheEvict;
+import org.springframework.cache.annotation.Cacheable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.TimeUnit;
 
 @Service
 public class ChemicalServiceImpl implements IChemicalService {
-
+    
+    private static final Logger log = LoggerFactory.getLogger(ChemicalServiceImpl.class);
+    
+    // 缓存相关常量
+    private static final String CACHE_KEY_CHEMICAL = "chemical:";
+    private static final String CACHE_KEY_CHEMICAL_LIST = "chemical_list:";
+    private static final String CACHE_KEY_CHEMICAL_COUNT = "chemical_count:";
+    private static final long CACHE_EXPIRE_TIME = 30; // 缓存过期时间（分钟）
+    
     @Autowired
     private ChemicalMapper chemicalMapper;
+    
+    @Autowired
+    private RedisUtil redisUtil;
 
     /**
      * 查询全部危化品数据
      * @return List<Chemical>
      */
     @Override
+    @Cacheable(value = "chemicalList", key = "'all'", unless = "#result == null || #result.isEmpty()")
     public List<Chemical> listChemical() {
-        return chemicalMapper.listChemical(null, null, null, null);
+        log.info("从数据库查询所有化学品");
+        
+        // 尝试从缓存获取
+        String cacheKey = CACHE_KEY_CHEMICAL_LIST + "all";
+        Object cachedChemicals = redisUtil.get(cacheKey);
+        if (cachedChemicals != null) {
+            log.info("从缓存获取所有化学品");
+            return (List<Chemical>) cachedChemicals;
+        }
+        
+        // 从数据库获取
+        List<Chemical> chemicals = chemicalMapper.listChemical(null, null, null, null);
+        
+        // 放入缓存
+        if (chemicals != null && !chemicals.isEmpty()) {
+            redisUtil.set(cacheKey, chemicals, TimeUnit.MINUTES.toSeconds(CACHE_EXPIRE_TIME));
+        }
+        
+        return chemicals;
     }
     
     /**
@@ -69,8 +105,27 @@ public class ChemicalServiceImpl implements IChemicalService {
      * @return Chemical
      */
     @Override
+    @Cacheable(value = "chemical", key = "#id", unless = "#result == null")
     public Chemical selectChemicalById(Integer id) {
-        return chemicalMapper.selectChemicalById(id);
+        log.info("从数据库查询化学品, id: {}", id);
+        
+        // 尝试从缓存获取
+        String cacheKey = CACHE_KEY_CHEMICAL + id;
+        Object cachedChemical = redisUtil.get(cacheKey);
+        if (cachedChemical != null) {
+            log.info("从缓存获取化学品, id: {}", id);
+            return (Chemical) cachedChemical;
+        }
+        
+        // 从数据库获取
+        Chemical chemical = chemicalMapper.selectChemicalById(id);
+        
+        // 放入缓存
+        if (chemical != null) {
+            redisUtil.set(cacheKey, chemical, TimeUnit.MINUTES.toSeconds(CACHE_EXPIRE_TIME));
+        }
+        
+        return chemical;
     }
 
     /**
@@ -79,6 +134,7 @@ public class ChemicalServiceImpl implements IChemicalService {
      */
     @Override
     @Transactional
+    @CacheEvict(value = {"chemicalList", "chemicalCount"}, allEntries = true)
     public int addChemical(Chemical chemical) {
         return chemicalMapper.addChemical(chemical);
     }
@@ -89,7 +145,12 @@ public class ChemicalServiceImpl implements IChemicalService {
      */
     @Override
     @Transactional
+    @CacheEvict(value = {"chemical", "chemicalList", "chemicalCount"}, allEntries = true)
     public int removeChemical(Integer id) {
+        // 清除单个记录的缓存
+        String cacheKey = CACHE_KEY_CHEMICAL + id;
+        redisUtil.del(cacheKey);
+        
         return chemicalMapper.removeChemical(id);
     }
 
@@ -99,7 +160,12 @@ public class ChemicalServiceImpl implements IChemicalService {
      */
     @Override
     @Transactional
+    @CacheEvict(value = {"chemical", "chemicalList", "chemicalCount"}, allEntries = true)
     public int editChemical(Chemical chemical) {
+        // 清除单个记录的缓存
+        String cacheKey = CACHE_KEY_CHEMICAL + chemical.getId();
+        redisUtil.del(cacheKey);
+        
         return chemicalMapper.editChemical(chemical);
     }
     
@@ -109,8 +175,25 @@ public class ChemicalServiceImpl implements IChemicalService {
      * @return int
      */
     @Override
+    @Cacheable(value = "chemicalCount", key = "'params_' + #params", unless = "#result == 0")
     public int countChemical(Map<String, Object> params) {
-        return chemicalMapper.countChemical(params);
+        log.info("从数据库统计化学品数量, params: {}", params);
+        
+        // 尝试从缓存获取
+        String cacheKey = CACHE_KEY_CHEMICAL_COUNT + "params_" + (params != null ? params.hashCode() : "null");
+        Object cachedCount = redisUtil.get(cacheKey);
+        if (cachedCount != null) {
+            log.info("从缓存获取化学品数量");
+            return (int) cachedCount;
+        }
+        
+        // 从数据库获取
+        int count = chemicalMapper.countChemical(params);
+        
+        // 放入缓存
+        redisUtil.set(cacheKey, count, TimeUnit.MINUTES.toSeconds(CACHE_EXPIRE_TIME));
+        
+        return count;
     }
     
     /**

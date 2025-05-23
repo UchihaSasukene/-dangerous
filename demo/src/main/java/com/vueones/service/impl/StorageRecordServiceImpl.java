@@ -6,7 +6,10 @@ import com.vueones.service.IStorageRecordService;
 import com.vueones.mapper.ChemicalMapper;
 import com.vueones.entity.Chemical;
 import com.vueones.service.IInventoryService;
+import com.vueones.util.RedisUtil;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.cache.annotation.CacheEvict;
+import org.springframework.cache.annotation.Cacheable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.slf4j.Logger;
@@ -14,15 +17,21 @@ import org.slf4j.LoggerFactory;
 
 import java.util.List;
 import java.util.Date;
-
-
 import java.util.ArrayList;
+import java.util.concurrent.TimeUnit;
 
 
 @Service
 public class StorageRecordServiceImpl implements IStorageRecordService {
     
     private static final Logger log = LoggerFactory.getLogger(StorageRecordServiceImpl.class);
+    
+    // 缓存相关常量
+    private static final String CACHE_KEY_STORAGE_RECORD = "storage_record:";
+    private static final String CACHE_KEY_STORAGE_RECORD_LIST = "storage_record_list:";
+    private static final String CACHE_KEY_STORAGE_RECORD_COUNT = "storage_record_count:";
+    private static final String CACHE_KEY_STORAGE_RECORD_SUM = "storage_record_sum:";
+    private static final long CACHE_EXPIRE_TIME = 30; // 缓存过期时间（分钟）
     
     @Autowired
     private StorageRecordMapper storageRecordMapper;
@@ -33,6 +42,9 @@ public class StorageRecordServiceImpl implements IStorageRecordService {
     @Autowired
     private IInventoryService inventoryService;
     
+    @Autowired
+    private RedisUtil redisUtil;
+    
     /**
      * 添加入库记录
      * @param record 入库记录
@@ -40,6 +52,7 @@ public class StorageRecordServiceImpl implements IStorageRecordService {
      */
     @Override
     @Transactional
+    @CacheEvict(value = {"storageRecordList", "storageRecordCount", "storageRecordSum"}, allEntries = true)
     public int addStorageRecord(StorageRecord record) {
         try {
             log.info("Service层接收到添加入库记录请求");
@@ -121,7 +134,12 @@ public class StorageRecordServiceImpl implements IStorageRecordService {
      */
     @Override
     @Transactional
+    @CacheEvict(value = {"storageRecord", "storageRecordList", "storageRecordCount", "storageRecordSum"}, allEntries = true)
     public int updateStorageRecord(StorageRecord record) {
+        // 清除单个记录的缓存
+        String cacheKey = CACHE_KEY_STORAGE_RECORD + record.getId();
+        redisUtil.del(cacheKey);
+        
         return storageRecordMapper.update(record);
     }
     /**
@@ -131,7 +149,12 @@ public class StorageRecordServiceImpl implements IStorageRecordService {
      */
     @Override
     @Transactional
+    @CacheEvict(value = {"storageRecord", "storageRecordList", "storageRecordCount", "storageRecordSum"}, allEntries = true)
     public int deleteStorageRecord(Integer id) {
+        // 清除单个记录的缓存
+        String cacheKey = CACHE_KEY_STORAGE_RECORD + id;
+        redisUtil.del(cacheKey);
+        
         return storageRecordMapper.deleteById(id);
     }
     /**
@@ -140,8 +163,27 @@ public class StorageRecordServiceImpl implements IStorageRecordService {
      * @return 入库记录
      */
     @Override
+    @Cacheable(value = "storageRecord", key = "#id", unless = "#result == null")
     public StorageRecord getStorageRecordById(Integer id) {
-        return storageRecordMapper.selectById(id);
+        log.info("从数据库查询入库记录, id: {}", id);
+        
+        // 尝试从缓存获取
+        String cacheKey = CACHE_KEY_STORAGE_RECORD + id;
+        Object cachedRecord = redisUtil.get(cacheKey);
+        if (cachedRecord != null) {
+            log.info("从缓存获取入库记录, id: {}", id);
+            return (StorageRecord) cachedRecord;
+        }
+        
+        // 从数据库获取
+        StorageRecord record = storageRecordMapper.selectById(id);
+        
+        // 放入缓存
+        if (record != null) {
+            redisUtil.set(cacheKey, record, TimeUnit.MINUTES.toSeconds(CACHE_EXPIRE_TIME));
+        }
+        
+        return record;
     }
     /**
      * 根据化学品id、化学品名称、供应商、入库时间查询入库记录
@@ -155,12 +197,37 @@ public class StorageRecordServiceImpl implements IStorageRecordService {
      * @return 入库记录列表
      */
     @Override
+    @Cacheable(value = "storageRecordList", key = "#chemicalId + '_' + #chemicalName + '_' + #supplier + '_' + #startTime + '_' + #endTime + '_' + #offset + '_' + #size", unless = "#result == null || #result.isEmpty()")
     public List<StorageRecord> getStorageRecordList(Integer chemicalId, String chemicalName, String supplier, Date startTime, Date endTime, Integer offset, Integer size) {
-        // 使用mapper提供的查询方法
-        List<StorageRecord> records = storageRecordMapper.selectList(chemicalId, chemicalName, startTime, endTime, supplier, offset, size);
+        log.info("从数据库查询入库记录列表, chemicalId: {}, chemicalName: {}, supplier: {}, startTime: {}, endTime: {}, offset: {}, size: {}", 
+                chemicalId, chemicalName, supplier, startTime, endTime, offset, size);
         
-        // 不再需要手动分页，因为SQL中已经处理了
-        return records != null ? records : new ArrayList<>();
+        // 构建缓存key
+        String cacheKey = CACHE_KEY_STORAGE_RECORD_LIST + 
+                (chemicalId != null ? chemicalId : "null") + "_" + 
+                (chemicalName != null ? chemicalName : "null") + "_" + 
+                (supplier != null ? supplier : "null") + "_" + 
+                (startTime != null ? startTime.getTime() : "null") + "_" + 
+                (endTime != null ? endTime.getTime() : "null") + "_" + 
+                offset + "_" + size;
+        
+        // 尝试从缓存获取
+        Object cachedList = redisUtil.get(cacheKey);
+        if (cachedList != null) {
+            log.info("从缓存获取入库记录列表");
+            return (List<StorageRecord>) cachedList;
+        }
+        
+        // 从数据库获取
+        List<StorageRecord> records = storageRecordMapper.selectList(chemicalId, chemicalName, startTime, endTime, supplier, offset, size);
+        List<StorageRecord> result = records != null ? records : new ArrayList<>();
+        
+        // 放入缓存
+        if (!result.isEmpty()) {
+            redisUtil.set(cacheKey, result, TimeUnit.MINUTES.toSeconds(CACHE_EXPIRE_TIME));
+        }
+        
+        return result;
     }
     
     /**
@@ -173,10 +240,34 @@ public class StorageRecordServiceImpl implements IStorageRecordService {
      * @return 记录数量
      */
     @Override
+    @Cacheable(value = "storageRecordCount", key = "#chemicalId + '_' + #chemicalName + '_' + #supplier + '_' + #startTime + '_' + #endTime")
     public int countStorageRecords(Integer chemicalId, String chemicalName, String supplier, Date startTime, Date endTime) {
-        // 使用Mapper提供的计数方法
+        log.info("从数据库统计入库记录数量, chemicalId: {}, chemicalName: {}, supplier: {}, startTime: {}, endTime: {}", 
+                chemicalId, chemicalName, supplier, startTime, endTime);
+        
+        // 构建缓存key
+        String cacheKey = CACHE_KEY_STORAGE_RECORD_COUNT + 
+                (chemicalId != null ? chemicalId : "null") + "_" + 
+                (chemicalName != null ? chemicalName : "null") + "_" + 
+                (supplier != null ? supplier : "null") + "_" + 
+                (startTime != null ? startTime.getTime() : "null") + "_" + 
+                (endTime != null ? endTime.getTime() : "null");
+        
+        // 尝试从缓存获取
+        Object cachedCount = redisUtil.get(cacheKey);
+        if (cachedCount != null) {
+            log.info("从缓存获取入库记录数量");
+            return (int) cachedCount;
+        }
+        
+        // 从数据库获取
         Integer count = storageRecordMapper.countStorageRecords(chemicalId, chemicalName, supplier, startTime, endTime);
-        return count != null ? count : 0;
+        int result = count != null ? count : 0;
+        
+        // 放入缓存
+        redisUtil.set(cacheKey, result, TimeUnit.MINUTES.toSeconds(CACHE_EXPIRE_TIME));
+        
+        return result;
     }
     
     /**
@@ -188,8 +279,34 @@ public class StorageRecordServiceImpl implements IStorageRecordService {
      * @return 入库总量
      */
     @Override
+    @Cacheable(value = "storageRecordSum", key = "#chemicalId + '_' + #chemicalName + '_' + #startTime + '_' + #endTime")
     public Double sumStorageAmount(Integer chemicalId, String chemicalName, Date startTime, Date endTime) {
-        return storageRecordMapper.sumAmountByChemicalId(chemicalId, chemicalName, startTime, endTime);
+        log.info("从数据库计算入库总量, chemicalId: {}, chemicalName: {}, startTime: {}, endTime: {}", 
+                chemicalId, chemicalName, startTime, endTime);
+        
+        // 构建缓存key
+        String cacheKey = CACHE_KEY_STORAGE_RECORD_SUM + 
+                (chemicalId != null ? chemicalId : "null") + "_" + 
+                (chemicalName != null ? chemicalName : "null") + "_" + 
+                (startTime != null ? startTime.getTime() : "null") + "_" + 
+                (endTime != null ? endTime.getTime() : "null");
+        
+        // 尝试从缓存获取
+        Object cachedSum = redisUtil.get(cacheKey);
+        if (cachedSum != null) {
+            log.info("从缓存获取入库总量");
+            return (Double) cachedSum;
+        }
+        
+        // 从数据库获取
+        Double sum = storageRecordMapper.sumAmountByChemicalId(chemicalId, chemicalName, startTime, endTime);
+        
+        // 放入缓存
+        if (sum != null) {
+            redisUtil.set(cacheKey, sum, TimeUnit.MINUTES.toSeconds(CACHE_EXPIRE_TIME));
+        }
+        
+        return sum;
     }
     
     /**
@@ -199,6 +316,7 @@ public class StorageRecordServiceImpl implements IStorageRecordService {
      */
     @Override
     @Transactional
+    @CacheEvict(value = {"storageRecordList", "storageRecordCount", "storageRecordSum"}, allEntries = true)
     public int batchAddStorageRecords(List<StorageRecord> records) {
         if (records == null || records.isEmpty()) {
             return 0;
@@ -210,6 +328,10 @@ public class StorageRecordServiceImpl implements IStorageRecordService {
                 record.setCreateTime(now);
             }
         }
+        
+        // 清除相关缓存
+        log.info("批量添加入库记录，清除相关缓存");
+        
         return storageRecordMapper.batchInsert(records);
     }
     
@@ -271,4 +393,4 @@ public class StorageRecordServiceImpl implements IStorageRecordService {
         return result != null ? result : 0;
     }
 
-} 
+}
