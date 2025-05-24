@@ -34,8 +34,8 @@ public class UsageRecord {
     private Date createTime;
 
     // 关联的危化品信息和用户信息
-    private Chemical chemical;
-    private Man user;
+     private Chemical chemical;
+     private Man user;
 
     // Getters and Setters
     public Integer getId() {
@@ -126,27 +126,27 @@ public class UsageRecord {
         this.createTime = createTime;
     }
 
-    public Chemical getChemical() {
-        return chemical;
-    }
-
-    public void setChemical(Chemical chemical) {
-        this.chemical = chemical;
-        if (chemical != null) {
-            this.chemicalName = chemical.getName();
-        }
-    }
-
-    public Man getUser() {
-        return user;
-    }
-
-    public void setUser(Man user) {
-        this.user = user;
-        if (user != null) {
-            this.userName = user.getName();
-        }
-    }
+     public Chemical getChemical() {
+         return chemical;
+     }
+    
+     public void setChemical(Chemical chemical) {
+         this.chemical = chemical;
+         if (chemical != null) {
+             this.chemicalName = chemical.getName();
+         }
+     }
+    
+     public Man getUser() {
+         return user;
+     }
+    
+     public void setUser(Man user) {
+         this.user = user;
+         if (user != null) {
+             this.userName = user.getName();
+         }
+     }
 
     @Override
     public String toString() {

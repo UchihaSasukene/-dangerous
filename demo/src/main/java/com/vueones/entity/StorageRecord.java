@@ -5,8 +5,9 @@ import com.fasterxml.jackson.annotation.JsonIdentityInfo;
 import com.fasterxml.jackson.annotation.ObjectIdGenerators;
 import com.fasterxml.jackson.annotation.JsonFormat;
 
+
 @JsonIdentityInfo(
-    generator = ObjectIdGenerators.PropertyGenerator.class, 
+    generator = ObjectIdGenerators.PropertyGenerator.class,
     property = "id",
     scope = StorageRecord.class
 )
@@ -29,8 +30,8 @@ public class StorageRecord {
     private Date createTime;
     
     // 关联对象
-    private Chemical chemical;
-    private Inventory inventory;
+     private Chemical chemical;
+     private Inventory inventory;
     private Man operator;
 
     // Getters and Setters
@@ -130,21 +131,21 @@ public class StorageRecord {
         this.createTime = createTime;
     }
 
-    public Chemical getChemical() {
-        return chemical;
-    }
+     public Chemical getChemical() {
+         return chemical;
+     }
 
-    public void setChemical(Chemical chemical) {
-        this.chemical = chemical;
-    }
+     public void setChemical(Chemical chemical) {
+         this.chemical = chemical;
+     }
 
-    public Inventory getInventory() {
-        return inventory;
-    }
+     public Inventory getInventory() {
+         return inventory;
+     }
 
-    public void setInventory(Inventory inventory) {
-        this.inventory = inventory;
-    }
+     public void setInventory(Inventory inventory) {
+         this.inventory = inventory;
+     }
 
     public Man getOperator() {
         return operator;
@@ -168,10 +169,10 @@ public class StorageRecord {
                 ", operatorId=" + operatorId +
                 ", supplier='" + supplier + '\'' +
                 ", notes='" + notes + '\'' +
-                ", createTime=" + createTime +
-                ", chemical=" + (chemical != null ? chemical.getId() : null) +
-                ", inventory=" + (inventory != null ? inventory.getId() : null) +
-                ", operator=" + (operator != null ? operator.getId() : null) +
+                ", createTime=" + createTime + '\'' +
+                ", chemical=" + chemical +
+                ", inventory=" + inventory +
+                ", operator=" + operator +
                 '}';
     }
 }

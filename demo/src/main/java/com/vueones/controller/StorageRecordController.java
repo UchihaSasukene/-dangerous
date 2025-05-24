@@ -80,14 +80,18 @@ public class StorageRecordController {
         result.put("notes", record.getNotes());
         result.put("createTime", record.getCreateTime());
         
-        // 添加必要的关联对象信息
-        if (record.getChemical() != null) {
-            Map<String, Object> chemical = new HashMap<>();
-            chemical.put("id", record.getChemical().getId());
-            chemical.put("name", record.getChemical().getName());
-            chemical.put("category", record.getChemical().getCategory());
-            chemical.put("dangerLevel", record.getChemical().getDangerLevel());
-            result.put("chemical", chemical);
+        // 关联对象
+        Chemical chemical = chemicalService.selectChemicalById(record.getChemicalId());
+        if (chemical != null) {
+            Map<String, Object> chemicalMap = new HashMap<>();
+            chemicalMap.put("id", chemical.getId());
+            chemicalMap.put("name", chemical.getName());
+            chemicalMap.put("category", chemical.getCategory());
+            chemicalMap.put("dangerLevel", chemical.getDangerLevel());
+            chemicalMap.put("storageCondition", chemical.getStorageCondition());
+            chemicalMap.put("warningThreshold", chemical.getWarningThreshold());
+            chemicalMap.put("description", chemical.getDescription());
+            result.put("chemical", chemicalMap);
         }
         
         if (record.getOperator() != null) {
@@ -986,4 +990,4 @@ public class StorageRecordController {
             return ResponseEntity.status(500).body(error);
         }
     }
-} 
+}

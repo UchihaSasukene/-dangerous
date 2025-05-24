@@ -20,6 +20,20 @@ public class RedisUtil {
     private RedisTemplate<String, Object> redisTemplate;
 
     /**
+     * 根据pattern获取匹配的key
+     * @param pattern 匹配模式
+     * @return 匹配的key集合
+     */
+    public Set<String> keys(String pattern) {
+        try {
+            return redisTemplate.keys(pattern);
+        } catch (Exception e) {
+            e.printStackTrace();
+            return null;
+        }
+    }
+    
+    /**
      * 指定缓存失效时间
      * @param key 键
      * @param time 时间(秒)

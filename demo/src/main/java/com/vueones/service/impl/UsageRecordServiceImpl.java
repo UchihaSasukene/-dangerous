@@ -17,6 +17,7 @@ import java.util.List;
 import java.util.Date;
 import java.util.ArrayList;
 import java.util.concurrent.TimeUnit;
+import java.util.Set;
 
 @Service
 public class UsageRecordServiceImpl implements IUsageRecordService {
@@ -38,6 +39,80 @@ public class UsageRecordServiceImpl implements IUsageRecordService {
     
     @Autowired
     private RedisUtil redisUtil;
+    
+    /**
+     * 清除所有UsageRecord相关的缓存
+     * 在系统启动或需要刷新缓存时调用，避免ID重复问题
+     */
+    public void clearAllUsageRecordCaches() {
+        log.info("清除所有UsageRecord相关的缓存");
+        // 使用Spring Cache注解清除缓存
+        clearUsageRecordCache();
+        clearUsageRecordListCache();
+        clearUsageRecordCountCache();
+        clearUsageRecordSumCache();
+        
+        // 手动清除可能的遗留缓存
+        try {
+            // 获取并删除所有以CACHE_KEY_USAGE_RECORD开头的键
+            Set<String> usageRecordKeys = redisUtil.keys(CACHE_KEY_USAGE_RECORD + "*");
+            if (usageRecordKeys != null && !usageRecordKeys.isEmpty()) {
+                for (String key : usageRecordKeys) {
+                    redisUtil.del(key);
+                }
+                log.info("已清除{}个UsageRecord缓存", usageRecordKeys.size());
+            }
+            
+            // 获取并删除所有以CACHE_KEY_USAGE_RECORD_LIST开头的键
+            Set<String> usageRecordListKeys = redisUtil.keys(CACHE_KEY_USAGE_RECORD_LIST + "*");
+            if (usageRecordListKeys != null && !usageRecordListKeys.isEmpty()) {
+                for (String key : usageRecordListKeys) {
+                    redisUtil.del(key);
+                }
+                log.info("已清除{}个UsageRecordList缓存", usageRecordListKeys.size());
+            }
+            
+            // 获取并删除所有以CACHE_KEY_USAGE_RECORD_COUNT开头的键
+            Set<String> usageRecordCountKeys = redisUtil.keys(CACHE_KEY_USAGE_RECORD_COUNT + "*");
+            if (usageRecordCountKeys != null && !usageRecordCountKeys.isEmpty()) {
+                for (String key : usageRecordCountKeys) {
+                    redisUtil.del(key);
+                }
+                log.info("已清除{}个UsageRecordCount缓存", usageRecordCountKeys.size());
+            }
+            
+            // 获取并删除所有以CACHE_KEY_USAGE_RECORD_SUM开头的键
+            Set<String> usageRecordSumKeys = redisUtil.keys(CACHE_KEY_USAGE_RECORD_SUM + "*");
+            if (usageRecordSumKeys != null && !usageRecordSumKeys.isEmpty()) {
+                for (String key : usageRecordSumKeys) {
+                    redisUtil.del(key);
+                }
+                log.info("已清除{}个UsageRecordSum缓存", usageRecordSumKeys.size());
+            }
+        } catch (Exception e) {
+            log.error("清除UsageRecord缓存时发生错误", e);
+        }
+    }
+    
+    @CacheEvict(value = "usageRecord", allEntries = true)
+    public void clearUsageRecordCache() {
+        log.info("清除usageRecord缓存");
+    }
+    
+    @CacheEvict(value = "usageRecordList", allEntries = true)
+    public void clearUsageRecordListCache() {
+        log.info("清除usageRecordList缓存");
+    }
+    
+    @CacheEvict(value = "usageRecordCount", allEntries = true)
+    public void clearUsageRecordCountCache() {
+        log.info("清除usageRecordCount缓存");
+    }
+    
+    @CacheEvict(value = "usageRecordSum", allEntries = true)
+    public void clearUsageRecordSumCache() {
+        log.info("清除usageRecordSum缓存");
+    }
     
     /**
      * 添加使用记录
@@ -164,10 +239,18 @@ public class UsageRecordServiceImpl implements IUsageRecordService {
         
         if (result != null && !result.isEmpty() && result.size() < 5) {
             // 打印一些结果示例，便于调试
-            log.info("查询结果示例: 第一条记录ID={}, chemicalName={}, userName={}", 
-                    result.get(0).getId(), 
-                    result.get(0).getChemical() != null ? result.get(0).getChemical().getName() : null,
-                    result.get(0).getUser() != null ? result.get(0).getUser().getName() : null);
+            log.info("查询结果示例: 第一条记录ID={}", 
+                result.get(0).getId());
+            if (result.size() > 1) {
+                log.info("第二条记录ID={}", result.get(1).getId());
+            }
+            if (result.size() > 2) {
+                log.info("第三条记录ID={}", result.get(2).getId());
+            }
+            if (result.size() > 3) {
+                log.info("第四条记录ID={}", result.get(3).getId());
+            }
+
         }
         
         // 放入缓存
