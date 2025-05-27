@@ -49,7 +49,7 @@ public class StorageRecordServiceImpl implements IStorageRecordService {
     /**
      * 清除所有StorageRecord相关的缓存
      */
-    private void clearAllStorageRecordCaches() {
+    public void clearAllStorageRecordCaches() {
         log.info("清除所有StorageRecord相关的缓存");
         // 使用pattern匹配删除所有相关缓存
         String[] patterns = {
@@ -67,6 +67,56 @@ public class StorageRecordServiceImpl implements IStorageRecordService {
                 }
                 log.info("已清除pattern: {} 相关的 {} 个缓存", pattern, keys.size());
             }
+        }
+    }
+    
+    /**
+     * 清除单个StorageRecord缓存
+     */
+    public void clearStorageRecordCache(Integer id) {
+        if (id != null) {
+            String cacheKey = CACHE_KEY_STORAGE_RECORD + id;
+            redisUtil.del(cacheKey);
+            log.info("已清除StorageRecord缓存: {}", cacheKey);
+        }
+    }
+    
+    /**
+     * 清除StorageRecord列表缓存
+     */
+    public void clearStorageRecordListCache() {
+        Set<String> keys = redisUtil.keys(CACHE_KEY_STORAGE_RECORD_LIST + "*");
+        if (keys != null && !keys.isEmpty()) {
+            for (String key : keys) {
+                redisUtil.del(key);
+            }
+            log.info("已清除StorageRecord列表缓存: {} 个", keys.size());
+        }
+    }
+    
+    /**
+     * 清除StorageRecord统计缓存
+     */
+    public void clearStorageRecordCountCache() {
+        Set<String> keys = redisUtil.keys(CACHE_KEY_STORAGE_RECORD_COUNT + "*");
+        if (keys != null && !keys.isEmpty()) {
+            for (String key : keys) {
+                redisUtil.del(key);
+            }
+            log.info("已清除StorageRecord统计缓存: {} 个", keys.size());
+        }
+    }
+    
+    /**
+     * 清除StorageRecord汇总缓存
+     */
+    public void clearStorageRecordSumCache() {
+        Set<String> keys = redisUtil.keys(CACHE_KEY_STORAGE_RECORD_SUM + "*");
+        if (keys != null && !keys.isEmpty()) {
+            for (String key : keys) {
+                redisUtil.del(key);
+            }
+            log.info("已清除StorageRecord汇总缓存: {} 个", keys.size());
         }
     }
     

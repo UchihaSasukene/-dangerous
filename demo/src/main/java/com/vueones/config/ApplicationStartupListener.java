@@ -69,12 +69,8 @@ public class ApplicationStartupListener implements ApplicationListener<ContextRe
             
             // 清除StorageRecord相关缓存（如果存在）
             if (storageRecordService != null) {
-                // 如果StorageRecordServiceImpl有类似的清除缓存方法，可以调用
-                // storageRecordService.clearAllStorageRecordCaches();
-                
-                // 手动清除storageRecord相关缓存
-                clearCachesByPattern("storage_record:*");
-                clearCachesByPattern("storage_record_list:*");
+                // 调用StorageRecordServiceImpl的清除缓存方法
+                storageRecordService.clearAllStorageRecordCaches();
             }
             
             log.info("所有缓存清除完成");
