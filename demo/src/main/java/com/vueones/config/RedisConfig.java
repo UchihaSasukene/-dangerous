@@ -50,8 +50,6 @@ public class RedisConfig {
         // 配置序列化特性
         redisObjectMapper.configure(SerializationFeature.FAIL_ON_EMPTY_BEANS, false);
         redisObjectMapper.configure(SerializationFeature.WRITE_DATES_AS_TIMESTAMPS, false);
-        // // 启用循环引用检测，使用@JsonIdentityInfo注解处理
-        // redisObjectMapper.configure(SerializationFeature.FAIL_ON_SELF_REFERENCES, true);
         // 启用循环引用检测，避免ID重复问题
         redisObjectMapper.configure(SerializationFeature.FAIL_ON_SELF_REFERENCES, false);
         // 配置反序列化特性

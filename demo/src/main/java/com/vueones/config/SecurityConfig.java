@@ -30,8 +30,8 @@ public class SecurityConfig {
         http
         .csrf(csrf -> csrf.disable())
         .authorizeHttpRequests(auth -> auth
-            // .requestMatchers("/user/**", "/", "/css/**", "/js/**", "/images/**").permitAll()
-            // .requestMatchers("/api/**").authenticated()
+            .requestMatchers("/user/**", "/", "/css/**", "/js/**", "/images/**").permitAll()
+            .requestMatchers("/api/**").authenticated()
             // 允许所有请求通过，不需要认证
             .anyRequest().permitAll()
         )

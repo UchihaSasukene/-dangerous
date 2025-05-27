@@ -72,8 +72,7 @@ export default {
       this.$refs.ruleForm2.validate((valid) => {
         if(valid){
           this.logining = true;
-
-          /*
+          
           // 构建登录请求数据
           const loginData = {
             email: this.ruleForm2.username,
@@ -109,10 +108,10 @@ export default {
                 this.$message.error('网络错误，请稍后重试');
               }
             });
-          */
+          
 
           // 暂时关闭登录验证，直接登录成功
-          this.logining = false;
+          // this.logining = false;
           // 创建模拟用户数据，包含用户类型
           const userData = {
             id: 1,
