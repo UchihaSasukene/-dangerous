@@ -19,6 +19,7 @@ import java.util.List;
 import java.util.Date;
 import java.util.ArrayList;
 import java.util.concurrent.TimeUnit;
+import java.util.Set;
 
 
 @Service
@@ -44,6 +45,30 @@ public class StorageRecordServiceImpl implements IStorageRecordService {
     
     @Autowired
     private RedisUtil redisUtil;
+    
+    /**
+     * 清除所有StorageRecord相关的缓存
+     */
+    private void clearAllStorageRecordCaches() {
+        log.info("清除所有StorageRecord相关的缓存");
+        // 使用pattern匹配删除所有相关缓存
+        String[] patterns = {
+            CACHE_KEY_STORAGE_RECORD + "*",
+            CACHE_KEY_STORAGE_RECORD_LIST + "*",
+            CACHE_KEY_STORAGE_RECORD_COUNT + "*",
+            CACHE_KEY_STORAGE_RECORD_SUM + "*"
+        };
+        
+        for (String pattern : patterns) {
+            Set<String> keys = redisUtil.keys(pattern);
+            if (keys != null && !keys.isEmpty()) {
+                for (String key : keys) {
+                    redisUtil.del(key);
+                }
+                log.info("已清除pattern: {} 相关的 {} 个缓存", pattern, keys.size());
+            }
+        }
+    }
     
     /**
      * 添加入库记录
@@ -110,7 +135,7 @@ public class StorageRecordServiceImpl implements IStorageRecordService {
             int result = storageRecordMapper.insert(record);
             log.info("插入入库记录结果: {}", result);
             
-            // 如果入库成功，更新库存
+            // 如果入库成功，更新库存并清除缓存
             if (result > 0) {
                 // 更新库存
                 boolean inventoryUpdated = inventoryService.processStorageIn(record.getChemicalId(), record.getAmount());
@@ -119,6 +144,8 @@ public class StorageRecordServiceImpl implements IStorageRecordService {
                 } else {
                     log.warn("入库成功但更新库存失败, 化学品ID: {}, 入库量: {}", record.getChemicalId(), record.getAmount());
                 }
+                // 清除所有相关缓存
+                clearAllStorageRecordCaches();
             }
             
             return result;
@@ -140,7 +167,12 @@ public class StorageRecordServiceImpl implements IStorageRecordService {
         String cacheKey = CACHE_KEY_STORAGE_RECORD + record.getId();
         redisUtil.del(cacheKey);
         
-        return storageRecordMapper.update(record);
+        int result = storageRecordMapper.update(record);
+        if (result > 0) {
+            // 清除所有相关缓存
+            clearAllStorageRecordCaches();
+        }
+        return result;
     }
     /**
      * 删除入库记录
@@ -155,7 +187,12 @@ public class StorageRecordServiceImpl implements IStorageRecordService {
         String cacheKey = CACHE_KEY_STORAGE_RECORD + id;
         redisUtil.del(cacheKey);
         
-        return storageRecordMapper.deleteById(id);
+        int result = storageRecordMapper.deleteById(id);
+        if (result > 0) {
+            // 清除所有相关缓存
+            clearAllStorageRecordCaches();
+        }
+        return result;
     }
     /**
      * 根据id查询入库记录
