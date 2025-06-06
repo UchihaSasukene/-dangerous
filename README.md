@@ -1,5 +1,4 @@
-基于springboot危化品信息管理系统
-本人毕业设计
+本人2025届毕业设计《基于springboot危化品信息管理系统》
 #项目环境：
 前端：vue2.9.4、node.js 22.14、element-ui 
 后端：jdk17、mybatis、springboot
